@@ -2,6 +2,9 @@ import { Application, extend } from "@pixi/react";
 import { Graphics } from "pixi.js";
 import { useCallback } from "react";
 
+import { GameWorld } from "./game/components/GameWorld";
+import { level01 } from "./game/config/level";
+
 extend({ Graphics });
 
 const VIEWPORT_WIDTH = 960;
@@ -19,8 +22,15 @@ export default function App() {
 			<h1>Boulder Dash Pixi</h1>
 
 			<div className="game-container">
-				<Application width={VIEWPORT_WIDTH} height={VIEWPORT_HEIGHT} backgroundColor={0x17211c} antialias={false}>
-					<pixiGraphics draw={drawScene} />
+				<Application
+					width={VIEWPORT_WIDTH}
+					height={VIEWPORT_HEIGHT}
+					backgroundColor={0x101510}
+					antialias={false}
+					resolution={window.devicePixelRatio}
+					autoDensity
+				>
+					<GameWorld level={level01} viewportWidth={VIEWPORT_WIDTH} viewportHeight={VIEWPORT_HEIGHT} />
 				</Application>
 			</div>
 		</main>
