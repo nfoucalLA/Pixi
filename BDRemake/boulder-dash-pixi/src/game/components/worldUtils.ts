@@ -9,41 +9,23 @@ export function clamp(value: number, minimum: number, maximum: number): number {
 }
 
 /**
- * Offset from the sprite anchor point to the top-left corner of the hitbox.
- * @param spriteSize The size of the sprite.
- * @param anchor The sprite anchor, with (0,0) being top-left and (1,1) being bottom-right.
- * @param hitbox The hitbox, relative to the top-left corner of the sprite.
+ * Clamps the top-left position of a rectangle so the rectangle stays entirely inside the world.
  */
-function getHitboxOffset(spriteSize: Size, anchor: Point, hitbox: Rectangle): Point {
+export function clampRectanglePositionToWorld(position: Point, rectangleSize: Size, worldSize: Size): Point {
 	return {
-		x: hitbox.x - spriteSize.width * anchor.x,
-		y: hitbox.y - spriteSize.height * anchor.y,
+		x: clamp(position.x, 0, worldSize.width - rectangleSize.width),
+		y: clamp(position.y, 0, worldSize.height - rectangleSize.height),
 	};
 }
 
 /**
- * Returns the hitbox in world coordinates.
- * @param position The position of the sprite anchor point in world coordinates.
+ * Returns a rectangle whose position corresponds to its top-left corner in world coordinates.
  */
-export function getHitboxWorldRectangle(position: Point, spriteSize: Size, anchor: Point, hitbox: Rectangle): Rectangle {
-	const offset = getHitboxOffset(spriteSize, anchor, hitbox);
-
+export function createWorldRectangle(position: Point, size: Size): Rectangle {
 	return {
-		x: position.x + offset.x,
-		y: position.y + offset.y,
-		width: hitbox.width,
-		height: hitbox.height,
-	};
-}
-
-/**
- * Clamps the sprite anchor position so that the hitbox stays inside the world.
- */
-export function clampHitboxPositionToWorld(position: Point, spriteSize: Size, anchor: Point, hitbox: Rectangle, worldSize: Size): Point {
-	const offset = getHitboxOffset(spriteSize, anchor, hitbox);
-
-	return {
-		x: clamp(position.x, -offset.x, worldSize.width - hitbox.width - offset.x),
-		y: clamp(position.y, -offset.y, worldSize.height - hitbox.height - offset.y),
+		x: position.x,
+		y: position.y,
+		width: size.width,
+		height: size.height,
 	};
 }
