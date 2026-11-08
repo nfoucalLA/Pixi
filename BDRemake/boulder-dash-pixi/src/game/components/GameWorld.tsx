@@ -5,14 +5,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { Keyboard } from "../input/Keyboard";
 import { createAdventurerTexture } from "../rendering/createAdventurerTexture";
 import type { LevelDefinition, Rectangle, Size } from "../types";
-import { getPlayerHitbox, PLAYER_ANCHORS, type PlayerState } from "./Player";
+import { Player } from "./Player";
 import { PLAYER_DEFINITION } from "./playerDefinition";
-import { getPlayerSpritePosition } from "./playerRendering";
-import { createPlayerState, updatePlayer } from "./playerSimulation";
 import { clamp } from "./worldUtils";
 
 // DEBUG: Show player hitbox for debugging purposes.
-const SHOW_PLAYER_HITBOX = false;
+const SHOW_PLAYER_HITBOX = true;
 
 export interface GameWorldProps {
 	level: LevelDefinition;
@@ -23,7 +21,7 @@ export interface GameWorldProps {
 /**
  * Game world component.
  *
- * React owns the lifecycle of the world, while PlayerState is the
+ * React owns the lifecycle of the world, while the Player instance is the
  * source of truth for the logical player position.
  *
  * Pixi objects are updated from the logical state and are used only
@@ -39,10 +37,10 @@ export function GameWorld({ level, viewportWidth, viewportHeight }: GameWorldPro
 	const adventurerTexture = useMemo<Texture>(() => createAdventurerTexture(), []);
 
 	/*
-	 * PlayerState.position represents the top-left corner of the logical hitbox in world coordinates.
+	 * Player.state.position represents the top-left corner of the logical hitbox in world coordinates.
 	 * It does not represent the Pixi sprite position.
 	 */
-	const playerStateRef = useRef<PlayerState>(createPlayerState({ x: 0, y: 0 }));
+	const player = useMemo(() => new Player({ x: 0, y: 0 }, PLAYER_DEFINITION.physics, PLAYER_DEFINITION.visual), []);
 
 	const worldWidth = level.widthInTiles * level.tileSize;
 	const worldHeight = level.heightInTiles * level.tileSize;
@@ -55,34 +53,30 @@ export function GameWorld({ level, viewportWidth, viewportHeight }: GameWorldPro
 		[worldWidth, worldHeight],
 	);
 
-	const playerAnchor = PLAYER_ANCHORS[PLAYER_DEFINITION.visual.anchorPreset];
+	const playerAnchor = player.getAnchor();
 
 	/**
 	 * Synchronizes the Pixi display objects with the logical player state.
 	 * This function does not update the simulation.
 	 */
-	const synchronizePlayerRendering = useCallback((playerState: PlayerState): Rectangle => {
+	const synchronizePlayerRendering = useCallback((): Rectangle => {
 		const playerSprite = playerSpriteRef.current;
-
 		const playerHitboxGraphics = playerHitboxGraphicsRef.current;
-
-		const spritePosition = getPlayerSpritePosition(playerState, PLAYER_DEFINITION);
+		const spritePosition = player.getSpritePosition();
+		const playerHitbox = player.getHitbox();
 
 		if (playerSprite) {
 			playerSprite.x = spritePosition.x;
 			playerSprite.y = spritePosition.y;
 		}
 
-		const playerHitbox = getPlayerHitbox(playerState, PLAYER_DEFINITION);
-
 		if (playerHitboxGraphics) {
 			playerHitboxGraphics.x = playerHitbox.x;
-
 			playerHitboxGraphics.y = playerHitbox.y;
 		}
 
 		return playerHitbox;
-	}, []);
+	}, [player]);
 
 	/**
 	 * Positions the camera so that it follows the center of the logical player hitbox.
@@ -129,23 +123,19 @@ export function GameWorld({ level, viewportWidth, viewportHeight }: GameWorldPro
 	 * The level spawn position represents the top-left corner of the player hitbox.
 	 */
 	useLayoutEffect(() => {
-		const playerState = playerStateRef.current;
+		player.reset({
+			x: level.playerStart.column * level.tileSize,
+			y: level.playerStart.row * level.tileSize,
+		});
 
-		playerState.position.x = level.playerStart.column * level.tileSize;
-		playerState.position.y = level.playerStart.row * level.tileSize;
-
-		playerState.velocity.x = 0;
-		playerState.velocity.y = 0;
-		playerState.grounded = false;
-
-		const playerHitbox = synchronizePlayerRendering(playerState);
+		const playerHitbox = synchronizePlayerRendering();
 
 		const world = worldRef.current;
 
 		if (world) {
 			updateCamera(world, playerHitbox);
 		}
-	}, [level.id, level.playerStart.column, level.playerStart.row, level.tileSize, synchronizePlayerRendering, updateCamera]);
+	}, [level.id, level.playerStart.column, level.playerStart.row, level.tileSize, player, synchronizePlayerRendering, updateCamera]);
 
 	/**
 	 * Draws the game map background.
@@ -172,18 +162,21 @@ export function GameWorld({ level, viewportWidth, viewportHeight }: GameWorldPro
 	 * Draws the player hitbox around the local Graphics origin.
 	 * The Graphics world position is synchronized with the logical hitbox position during the game loop.
 	 */
-	const drawPlayerHitbox = useCallback((graphics: Graphics): void => {
-		graphics.clear();
+	const drawPlayerHitbox = useCallback(
+		(graphics: Graphics): void => {
+			graphics.clear();
 
-		const hitboxSize = PLAYER_DEFINITION.physics.hitboxSize;
+			const hitboxSize = player.physics.hitboxSize;
 
-		graphics.rect(0, 0, hitboxSize.width, hitboxSize.height).stroke({
-			color: 0xff3b30,
-			width: 1,
-			alignment: 1,
-			alpha: 0.9,
-		});
-	}, []);
+			graphics.rect(0, 0, hitboxSize.width, hitboxSize.height).stroke({
+				color: 0xff3b30,
+				width: 1,
+				alignment: 1,
+				alpha: 0.9,
+			});
+		},
+		[player],
+	);
 
 	/**
 	 * Main game loop.
@@ -211,31 +204,19 @@ export function GameWorld({ level, viewportWidth, viewportHeight }: GameWorldPro
 
 			const movementDirection = keyboard.getMovementDirection();
 
-			const playerState = playerStateRef.current;
-
-			/*
-			 * Update the logical player state.
-			 * updatePlayer knows nothing about Pixi, Sprite, anchor, texture or Graphics.
-			 */
-			updatePlayer({
-				state: playerState,
-				definition: PLAYER_DEFINITION,
-				movementDirection,
-				deltaSeconds,
-				worldSize,
-			});
+			player.update(movementDirection, deltaSeconds, worldSize);
 
 			/*
 			 * Synchronize the Pixi representation with the updated logical state.
 			 */
-			const playerHitbox = synchronizePlayerRendering(playerState);
+			const playerHitbox = synchronizePlayerRendering();
 
 			/*
 			 * Follow the logical hitbox rather than the visual sprite bounds.
 			 */
 			updateCamera(world, playerHitbox);
 		},
-		[keyboard, synchronizePlayerRendering, updateCamera, worldSize],
+		[keyboard, player, synchronizePlayerRendering, updateCamera, worldSize],
 	);
 
 	// Game loop ticker subscription.
@@ -249,8 +230,8 @@ export function GameWorld({ level, viewportWidth, viewportHeight }: GameWorldPro
 			<pixiSprite
 				ref={playerSpriteRef}
 				texture={adventurerTexture}
-				width={PLAYER_DEFINITION.visual.spriteSize.width}
-				height={PLAYER_DEFINITION.visual.spriteSize.height}
+				width={player.visual.spriteSize.width}
+				height={player.visual.spriteSize.height}
 				anchor={playerAnchor}
 			/>
 
