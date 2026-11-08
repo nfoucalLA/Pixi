@@ -8,9 +8,18 @@ import type { LevelDefinition, Rectangle, Size } from "../types";
 import { Player } from "./Player";
 import { PLAYER_DEFINITION } from "./playerDefinition";
 import { clamp } from "./worldUtils";
+import bdcffText from "../../assets/ArnoDash01.bd?raw"; // BoulderDash level 1 BDCFF format
+import { BDCFFParser } from "../config/LevelParser/BDCFFParser";
 
 // DEBUG: Show player hitbox for debugging purposes.
 const SHOW_PLAYER_HITBOX = true;
+
+const parser = new BDCFFParser();
+const game = parser.parse(bdcffText);
+
+console.log(game.caves.length);
+console.log(game.caves[2].name);
+console.log(game.caves[2]);
 
 export interface GameWorldProps {
 	level: LevelDefinition;

@@ -4,5 +4,6 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
-  "eslint.workingDirectories": [{ "directory": "boulder-dash-pixi" }]
+  "eslint.workingDirectories": [{ "directory": "boulder-dash-pixi" }],
+  "vitest.rootConfig": "boulder-dash-pixi/vite.config.ts"
 }
