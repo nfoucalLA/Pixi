@@ -51,20 +51,17 @@ export class Keyboard {
 		if (this.pressedKeys.has("ArrowLeft")) {
 			x -= 1;
 		}
-
 		if (this.pressedKeys.has("ArrowRight")) {
 			x += 1;
 		}
-
 		if (this.pressedKeys.has("ArrowUp")) {
 			y -= 1;
 		}
-
 		if (this.pressedKeys.has("ArrowDown")) {
 			y += 1;
 		}
 
-		// Évite que les diagonales soient plus rapides.
+		// Avoid diagonal movement being faster.
 		const length = Math.hypot(x, y);
 
 		if (length > 0) {

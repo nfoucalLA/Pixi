@@ -1,22 +1,22 @@
 import { Texture } from "pixi.js";
 
 const PIXEL_ART = [
-	"................",
-	"......HHHH......",
-	".....HHHHHH.....",
-	".....HSSSSH.....",
-	".....SSEESS.....",
-	"......SSSS......",
-	".....BBBBBB.....",
-	"....BBRBBRBB....",
-	"....BBBBBBBB....",
-	".....BBBBBB.....",
-	".....BB..BB.....",
-	"....BBB..BBB....",
-	"....LL....LL....",
-	"...LLL....LLL...",
-	"...DDD....DDD...",
-	"................",
+	"............",
+	"....HHHH....",
+	"...HHHHHH...",
+	"...HSSSSH...",
+	"...SSEESS...",
+	"....SSSS....",
+	"...BBBBBB...",
+	"..BBRBBRBB..",
+	"..BBBBBBBB..",
+	"...BBBBBB...",
+	"...BB..BB...",
+	"..BBB..BBB..",
+	"..LL....LL..",
+	".LLL....LLL.",
+	".DDD....DDD.",
+	"............",
 ] as const;
 
 const COLORS: Record<string, string> = {
@@ -32,13 +32,13 @@ const COLORS: Record<string, string> = {
 export function createAdventurerTexture(): Texture {
 	const canvas = document.createElement("canvas");
 
-	canvas.width = 16;
+	canvas.width = 12;
 	canvas.height = 16;
 
 	const context = canvas.getContext("2d");
 
 	if (!context) {
-		throw new Error("Impossible de créer le contexte 2D du sprite.");
+		throw new Error("Impossible to create adventurer context.");
 	}
 
 	context.imageSmoothingEnabled = false;
