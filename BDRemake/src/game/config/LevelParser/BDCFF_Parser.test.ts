@@ -5,7 +5,8 @@ import boulderDash01 from "../../../assets/BoulderDash01.bd?raw";
 import boulderDash01NoOne from "../../../assets/BoulderDash01_NoOne16BD.bd?raw";
 import boulderDash02 from "../../../assets/BoulderDash02.bd?raw";
 import boulderDash02Super from "../../../assets/BoulderDash02_SuperBD.bd?raw";
-import { BDCFFParser } from "./BDCFFParser";
+import { BDCFFParser } from "./BDCFF_Parser";
+import { buildCaveMap } from "./caveMap";
 
 const parser = new BDCFFParser();
 
@@ -92,7 +93,9 @@ MagicWallTime=25
 			],
 			amoebaTime: 999,
 			magicWallTime: 25,
+			coding: "objects",
 			objects: [],
+			map: expect.any(Array),
 		});
 	});
 
@@ -154,7 +157,7 @@ FillRect=21 1 32 16 STEELWALL DIRT
 [cave]
 Name=A
 [objects]
-Raster=16 17 4 1 6 1 FIREFLYr
+Add=1 1 DIRT WALL
 Point=1 1 DIRT
 [/objects]
 [/cave]
@@ -165,6 +168,17 @@ Point=1 1 DIRT
 
 		// Assert
 		expect(game.caves[0].objects).toEqual([{ type: "Point", x: 1, y: 1, element: "DIRT" }]);
+	});
+
+	test("parses Raster objects", () => {
+		// Arrange
+		const input = "[cave]\nName=A\n[objects]\nRaster=16 17 4 1 6 1 FIREFLYr\n[/objects]\n[/cave]";
+
+		// Act
+		const [cave] = parser.parse(input).caves;
+
+		// Assert
+		expect(cave.objects).toEqual([{ type: "Raster", x: 16, y: 17, countX: 4, countY: 1, stepX: 6, stepY: 1, element: "FIREFLYr" }]);
 	});
 
 	test("ignores [demo] content and keeps cave properties separate", () => {
@@ -340,6 +354,7 @@ HatchingDelay=2
 
 		// Assert
 		expect(cave.map).toEqual(["WWWWWW", "WXd..W", "W    W", "W   PW", "WWWWWW"]);
+		expect(cave.coding).toBe("map");
 		expect(cave.objects).toEqual([]);
 	});
 
@@ -354,15 +369,16 @@ HatchingDelay=2
 		expect(cave.map).toEqual(["   ", " .W"]);
 	});
 
-	test("does not set a map on object-coded caves", () => {
+	test("renders object-coded caves into a map of the same type", () => {
 		// Arrange
-		const input = "[cave]\nName=A\n[objects]\nPoint=1 1 DIRT\n[/objects]\n[/cave]";
+		const input = "[cave]\nName=A\nSize=6 4\n[objects]\nPoint=1 1 DIRT\n[/objects]\n[/cave]";
 
 		// Act
 		const [cave] = parser.parse(input).caves;
 
 		// Assert
-		expect(cave.map).toBeUndefined();
+		expect(cave.coding).toBe("objects");
+		expect(cave.map).toEqual(["......", "......", "......", "......"]);
 	});
 
 	test("does not attach maps to the wrong cave", () => {
@@ -814,5 +830,264 @@ describe("asset ArnoDash01.bd (map-coded)", () => {
 				expect(Number.isFinite(n), `${cave.name}: ${n}`).toBe(true);
 			}
 		}
+	});
+});
+
+describe("object-coded cave rendering", () => {
+	function render(body: string, header = "Size=8 6"): string[] {
+		const input = `[cave]\nName=A\n${header}\n[objects]\n${body}\n[/objects]\n[/cave]`;
+
+		return parser.parse(input).caves[0].map;
+	}
+
+	test("fills with SPACE when InitialFill says so", () => {
+		// Arrange
+		const header = "Size=3 2\nInitialFill=SPACE";
+
+		// Act
+		const map = render("Point=0 0 WALL", header);
+
+		// Assert
+		expect(map).toEqual(["w  ", "   "]);
+	});
+
+	test("draws points, horizontal and vertical lines", () => {
+		// Arrange
+		const body = "Point=0 0 INBOX\nLine=1 0 7 0 WALL\nLine=7 1 7 5 STEELWALL";
+
+		// Act
+		const map = render(body);
+
+		// Assert
+		expect(map).toEqual(["Pwwwwwww", ".......W", ".......W", ".......W", ".......W", ".......W"]);
+	});
+
+	test("draws diagonal lines in both directions", () => {
+		// Arrange
+		const body = "Line=0 0 3 3 WALL\nLine=7 0 4 3 STEELWALL";
+
+		// Act
+		const map = render(body);
+
+		// Assert
+		expect(map.slice(0, 4)).toEqual(["w......W", ".w....W.", "..w..W..", "...wW..."]);
+	});
+
+	test("draws rectangle outlines and filled rectangles", () => {
+		// Arrange
+		const body = "Rectangle=0 0 3 2 WALL\nFillRect=4 3 7 5 STEELWALL SPACE";
+
+		// Act
+		const map = render(body);
+
+		// Assert
+		expect(map).toEqual(["wwww....", "w..w....", "wwww....", "....WWWW", "....W  W", "....WWWW"]);
+	});
+
+	test("fills a rectangle with its border element when no fill element is given", () => {
+		// Arrange
+		const body = "FillRect=0 0 2 2 WALL";
+
+		// Act
+		const map = render(body);
+
+		// Assert
+		expect(map.slice(0, 3)).toEqual(["www.....", "www.....", "www....."]);
+	});
+
+	test("draws rasters", () => {
+		// Arrange
+		const body = "Raster=0 0 3 2 3 2 BOULDER";
+
+		// Act
+		const map = render(body);
+
+		// Assert
+		expect(map.slice(0, 3)).toEqual(["r..r..r.", "........", "r..r..r."]);
+	});
+
+	test("applies objects in file order so later ones overwrite earlier ones", () => {
+		// Arrange
+		const body = "FillRect=0 0 2 2 WALL\nPoint=1 1 DIAMOND";
+
+		// Act
+		const map = render(body);
+
+		// Assert
+		expect(map[1].slice(0, 3)).toBe("wdw");
+	});
+
+	test("clips objects that go out of the cave", () => {
+		// Arrange
+		const body = "Line=6 5 12 5 WALL\nPoint=-1 0 WALL\nPoint=3 9 WALL";
+
+		// Act
+		const map = render(body);
+
+		// Assert
+		expect(map).toHaveLength(6);
+		expect(map[5]).toBe("......ww");
+		expect(map.every((row) => row.length === 8)).toBe(true);
+	});
+
+	test("accepts element name variants used by some files", () => {
+		// Arrange
+		const body = "Point=0 0 FIREFLYD\nPoint=1 0 HEXPANDING_WALL\nPoint=2 0 BUTTERFLYL";
+
+		// Act
+		const [row] = render(body);
+
+		// Assert
+		expect(row.slice(0, 3)).toBe("qxC");
+	});
+
+	test("throws for elements without a map code", () => {
+		// Arrange
+		const body = "Point=0 0 UNKNOWNTHING";
+
+		// Act
+		const act = () => render(body);
+
+		// Assert
+		expect(act).toThrow(/UNKNOWNTHING/);
+	});
+
+	test("encodes with custom [mapcodes]", () => {
+		// Arrange
+		const input = "[mapcodes]\n#=WALL\n[/mapcodes]\n[cave]\nName=A\nSize=3 1\n[objects]\nPoint=1 0 WALL\n[/objects]\n[/cave]";
+
+		// Act
+		const [cave] = parser.parse(input).caves;
+
+		// Assert
+		expect(cave.map).toEqual([".#."]);
+	});
+
+	test("encodes with two-character map codes", () => {
+		// Arrange
+		const input =
+			"[mapcodes]\nLength=2\n..=DIRT\nWs=STEELWALL\n[/mapcodes]\n[cave]\nName=A\nSize=3 1\n[objects]\nPoint=1 0 STEELWALL\n[/objects]\n[/cave]";
+
+		// Act
+		const [cave] = parser.parse(input).caves;
+
+		// Assert
+		expect(cave.map).toEqual(["..Ws.."]);
+	});
+
+	describe("RandomFill", () => {
+		const input = "[cave]\nName=A\nSize=20 12\nRandSeed=10 11 12 13 14\nRandomFill=SPACE 60 BOULDER 50 DIAMOND 9\n[/cave]";
+
+		test("is deterministic", () => {
+			// Arrange
+			const first = parser.parse(input).caves[0].map;
+
+			// Act
+			const second = parser.parse(input).caves[0].map;
+
+			// Assert
+			expect(second).toEqual(first);
+		});
+
+		test("only uses the fill elements and leaves the first and last rows untouched", () => {
+			// Arrange
+			const { map } = parser.parse(input).caves[0];
+
+			// Act
+			const cells = new Set(map.slice(1, -1).join(""));
+
+			// Assert
+			expect([...cells].every((c) => [" ", "r", "d", "."].includes(c))).toBe(true);
+			expect(cells.size).toBeGreaterThan(1);
+			expect(map[0]).toBe(".".repeat(20));
+			expect(map[11]).toBe(".".repeat(20));
+		});
+
+		test("draws objects over the random fill", () => {
+			// Arrange
+			const withObject = input.replace("[/cave]", "[objects]\nFillRect=0 0 19 11 WALL\n[/objects]\n[/cave]");
+
+			// Act
+			const { map } = parser.parse(withObject).caves[0];
+
+			// Assert
+			expect(map.join("")).toBe("w".repeat(20 * 12));
+		});
+
+		test("uses a different seed for each level", () => {
+			// Arrange
+			const game = parser.parse(input);
+			const [cave] = game.caves;
+
+			// Act
+			const level1 = buildCaveMap(cave, game.mapCodes, 1);
+			const level2 = buildCaveMap(cave, game.mapCodes, 2);
+
+			// Assert
+			expect(level1).toEqual(cave.map);
+			expect(level2).not.toEqual(level1);
+		});
+	});
+
+	test("buildCaveMap returns the map of map-coded caves for any level", () => {
+		// Arrange
+		const game = parser.parse("[cave]\nName=A\nRandSeed=1 2\n[map]\nWW\n..\n[/map]\n[/cave]");
+		const [cave] = game.caves;
+
+		// Act
+		const level2 = buildCaveMap(cave, game.mapCodes, 2);
+
+		// Assert
+		expect(level2).toEqual(["WW", ".."]);
+	});
+});
+
+describe.each([
+	{ file: "ArnoDash01.bd", text: arnoDash01 },
+	{ file: "BoulderDash01.bd", text: boulderDash01 },
+	{ file: "BoulderDash01_NoOne16BD.bd", text: boulderDash01NoOne },
+	{ file: "BoulderDash02.bd", text: boulderDash02 },
+	{ file: "BoulderDash02_SuperBD.bd", text: boulderDash02Super },
+])("map of every cave in $file", ({ text }) => {
+	test("is a grid matching the cave size", () => {
+		// Arrange
+		const { caves } = parser.parse(text);
+
+		// Act / Assert
+		for (const cave of caves) {
+			expect(cave.map, `${cave.name} height`).toHaveLength(cave.size.height);
+
+			for (const row of cave.map) {
+				expect(row, `${cave.name} width`).toHaveLength(cave.size.width);
+			}
+		}
+	});
+
+	test("contains exactly one INBOX and one OUTBOX in non-intermission caves", () => {
+		// Arrange
+		const { caves } = parser.parse(text);
+
+		// Act / Assert
+		for (const cave of caves.filter((c) => !c.intermission)) {
+			const cells = cave.map.join("");
+
+			expect(cells.split("P").length - 1, `${cave.name} INBOX`).toBe(1);
+			expect(cells.split("X").length - 1, `${cave.name} OUTBOX`).toBe(1);
+		}
+	});
+});
+
+describe("BoulderDash01.bd rendering", () => {
+	test("places the INBOX and OUTBOX of the first cave at their object coordinates", () => {
+		// Arrange
+		const [cave] = parser.parse(boulderDash01).caves;
+
+		// Act
+		const inbox = cave.map[2][3];
+		const outbox = cave.map[16][38];
+
+		// Assert
+		expect(inbox).toBe("P");
+		expect(outbox).toBe("X");
 	});
 });

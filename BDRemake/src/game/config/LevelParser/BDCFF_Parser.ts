@@ -1,3 +1,5 @@
+import { buildCaveMap } from "./caveMap";
+
 export interface BDCFFSize {
 	width: number;
 	height: number;
@@ -71,11 +73,14 @@ export interface BDCFFCave {
 	slimePermeability?: number;
 	hatchingDelay?: number;
 
-	/** Object-coded caves only. */
+	/** How the cave is described in the file. */
+	coding: "map" | "objects";
+
+	/** Raw objects, empty for map-coded caves. */
 	objects: CaveObject[];
 
-	/** Map-coded caves only: raw rows, whitespace preserved. */
-	map?: string[];
+	/** Always defined: rows of map codes (whitespace preserved), rendered for level 1 when object-coded. */
+	map: string[];
 }
 
 export interface RandomFillEntry {
@@ -83,7 +88,7 @@ export interface RandomFillEntry {
 	probability: number;
 }
 
-export type CaveObject = PointObject | LineObject | RectangleObject | FillRectObject;
+export type CaveObject = PointObject | LineObject | RectangleObject | FillRectObject | RasterObject;
 
 export interface PointObject {
 	type: "Point";
@@ -118,6 +123,17 @@ export interface FillRectObject {
 	y2: number;
 	borderElement: string;
 	fillElement: string;
+}
+
+export interface RasterObject {
+	type: "Raster";
+	x: number;
+	y: number;
+	countX: number;
+	countY: number;
+	stepX: number;
+	stepY: number;
+	element: string;
 }
 
 export const DEFAULT_CAVE_SIZE: Readonly<BDCFFSize> = { width: 40, height: 22 };
@@ -185,6 +201,9 @@ function parseRandomFill(value: string): RandomFillEntry[] {
 	return result;
 }
 
+/**
+ * Parses BDCFF formatted game files into a structured BDCFFGame object.
+ */
 export class BDCFFParser {
 	parse(text: string): BDCFFGame {
 		const game: BDCFFGame = {
@@ -225,7 +244,7 @@ export class BDCFFParser {
 			// Map rows and map codes can legitimately start or end with a space (SPACE element).
 			if (section === "map" && currentCave) {
 				if (rawLine !== "" && !rawLine.startsWith(";")) {
-					currentCave.map ??= [];
+					currentCave.coding = "map";
 					currentCave.map.push(rawLine);
 				}
 
@@ -270,7 +289,9 @@ export class BDCFFParser {
 			diamondValues: [],
 			diamondsRequired: [],
 			caveTimes: [],
+			coding: "objects",
 			objects: [],
+			map: [],
 		};
 	}
 
@@ -326,6 +347,8 @@ export class BDCFFParser {
 
 				cave.size = { ...fallback };
 			}
+
+			cave.map = buildCaveMap(cave, game.mapCodes);
 		}
 	}
 
@@ -556,6 +579,18 @@ export class BDCFFParser {
 					y2: Number(p[3]),
 					borderElement: p[4],
 					fillElement: p[5] ?? p[4],
+				};
+
+			case "Raster":
+				return {
+					type: "Raster",
+					x: Number(p[0]),
+					y: Number(p[1]),
+					countX: Number(p[2]),
+					countY: Number(p[3]),
+					stepX: Number(p[4]),
+					stepY: Number(p[5]),
+					element: p[6],
 				};
 
 			default:
