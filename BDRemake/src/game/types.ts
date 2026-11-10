@@ -1,8 +1,14 @@
+import type { CellType } from "./config/CellType";
+
 export interface LevelDefinition {
 	readonly id: string;
+	readonly title: string;
 	readonly widthInTiles: number;
 	readonly heightInTiles: number;
 	readonly tileSize: number;
+	readonly map: CellType[][];
+	readonly diamondsRequired: number;
+	readonly timeLimit: number; // in seconds
 	readonly playerStart: { readonly column: number; readonly row: number };
 }
 
